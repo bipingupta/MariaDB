@@ -1,0 +1,10 @@
+openssl genrsa 2048 > /opt/cert/ca-key.pem
+openssl req -new -x509 -nodes -days 365000 -key /opt/cert/ca-key.pem -out /opt/cert/ca-cert.pem -subj '//CN=Admin/O=Global Security, Inc./C=US/ST=Oregon/L=Portland'
+
+openssl req -newkey rsa:2048 -days 365000 -nodes -keyout /opt/cert/server-key1.pem -out /opt/cert/server-req.pem -subj '//CN=MariaDB server/O=Global Security, Inc./C=US/ST=Oregon/L=Portland'
+openssl rsa -in /opt/cert/server-key1.pem -out /opt/cert/server-key.pem
+openssl x509 -req -in /opt/cert/server-req.pem -days 365000 -CA /opt/cert/ca-cert.pem -CAkey /opt/cert/ca-key.pem -set_serial 01 -out /opt/cert/server-cert.pem
+
+openssl req -newkey rsa:2048 -days 365000 -nodes -keyout /opt/cert/client-key1.pem -out /opt/cert/client-req.pem  -subj '//CN=MariaDB user/O=Global Security, Inc./C=US/ST=Oregon/L=Portland'
+openssl rsa -in /opt/cert/client-key1.pem -out /opt/cert/client-key.pem 
+openssl x509 -req -in /opt/cert/client-req.pem -days 365000 -CA /opt/cert/ca-cert.pem -CAkey /opt/cert/ca-key.pem -set_serial 01 -out /opt/cert/client-cert.pem 

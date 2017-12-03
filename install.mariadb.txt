@@ -1,0 +1,33 @@
+UNTAR
+tar -xvf /root/mariadb-10.2.11-linux-x86_64.tar.gz -C /opt/mariadb --strip 1    
+
+MYSQL (ADD GROUP & USER)
+groupadd mysql
+useradd -r -g mysql -s /bin/false mysql
+
+IN CASE IF U NEED
+chown mysql:mysql
+
+COPY configutaion to my.cnf, my1.cnf => /opt/mariadb
+mkdir /opt/data
+mkdir /opt/data2
+
+INITIALIZE InnoDB DATABASE FiLE SYSTEM
+/opt/mariadb/scripts/mysql_install_db --defaults-file=/opt/mariadb/my.cnf --basedir=/opt/mariadb --datadir=/opt/data
+/opt/mariadb/scripts/mysql_install_db --defaults-file=/opt/mariadb/my1.cnf --basedir=/opt/mariadb --datadir=/opt/data2
+chmod -R 755 /opt/data
+chmod -R 755 /opt/data2
+
+START SERVER
+/opt/mariadb/bin/mysqld --defaults-file=/opt/mariadb/my.cnf
+/opt/mariadb/bin/mysqld --defaults-file=/opt/mariadb/my1.cnf
+
+KILLING MYSQL DAEMON
+pgrep mysqld
+kill process_id
+pkill mysqld
+top
+
+INSTALL rsync,lsof (IF MISSING)
+lsof-4.82-5.el6.x86_64.rpm
+rsync-3.0.6-12.el6.x86_64.rpm
