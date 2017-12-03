@@ -31,3 +31,6 @@ top
 INSTALL rsync,lsof (IF MISSING)
 lsof-4.82-5.el6.x86_64.rpm
 rsync-3.0.6-12.el6.x86_64.rpm
+
+yum install rsync nmap lsof perl-DBI nc
+yum install MariaDB-server MariaDB-client MariaDB-compat galera socat jemalloc
