@@ -1,3 +1,4 @@
+http://www.folkstalk.com/p/unix-commands-list.html
 tar xvzf /vagrant/jre-8u151-linux-i586.tar.gz -C /usr/java --strip-components=1
 ln -sf /usr/java/bin/java /usr/bin/java
 ln -sf /usr/java/bin/javac /usr/bin/javacjavac
