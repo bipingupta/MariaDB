@@ -23,7 +23,11 @@ shell> export PATH=$PATH:/opt/java/bin
 # Kill Java Process
 killall java
 ps aux | grep java
+ps -ef | grep java
 kill -s 9 17864
+netstat -ntpl
+killall -9 java
+
 
 # Remove Directory Recursively
 rm -rf data1
