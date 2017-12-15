@@ -18,3 +18,28 @@ file /usr/bin/java
 
 tar /apache-maven-3.0.5-bin.tar.gz -C /usr/maven --strip-components=1
 ln -sf /usr/maven/bin/mvn /usr/bin/mvn
+
+shell> export PATH=$PATH:/opt/java/bin
+# Kill Java Process
+killall java
+ps aux | grep java
+kill -s 9 17864
+
+# Remove Directory Recursively
+rm -rf data1
+
+# Find a file in sub-folder  Location
+find . -name grastate.dat
+INSTALLING RPM
+# rpm -ivh libaio-version.rpmFIND PACKAGE NAME
+rpm -qa | grep -i openssl
+UNSTALLING RPM
+rpm -e <package name>
+
+rpm -e openssl-1.0.1e-48.el6_8.1.i686
+
+cat /etc/redhat-release 
+Red Hat Enterprise Linux Server release 6.6 (Santiago)
+
+
+rpm --query redhat-release-server
