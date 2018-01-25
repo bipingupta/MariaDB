@@ -1,18 +1,17 @@
 http://www.folkstalk.com/p/unix-commands-list.html
-tar xvzf /vagrant/jre-8u151-linux-i586.tar.gz -C /usr/java --strip-components=1
-ln -sf /usr/java/bin/java /usr/bin/java
-ln -sf /usr/java/bin/javac /usr/bin/javacjavac
+tar xvzf jre-8u151-linux-i586.tar.gz -C /opt/java --strip-components=1
 
+/usr/sbin/alternatives --config java
+/usr/sbin/alternatives --config javac
+export JAVA_HOME=" /opt/java"
+export java_home=" /opt/java"
+
+export PATH=$PATH:$JAVA
+echo $JAVA_HOME
 
 rm -rf /usr/bin/java
-
-export JAVA_HOME=/usr/java
-export PATH=${PATH}:{JAVA_HOME}/bin
-update-alternatives --install /usr/java java ${JAVA_HOME%*/}/bin/java 20000
-update-alternatives --install /usr/bin/javac javac ${JAVA_HOME%*/}/bin/javac 20000
-update-alternatives --config java
-/usr/sbin/alternatives --config java
-ls -la /etc/alternatives/
+rm -rf  /etc/alternatives/java
+ln -s /opt/java/bin/java /usr/bin/java
 
 which java
 file /usr/bin/java
