@@ -47,3 +47,144 @@ Red Hat Enterprise Linux Server release 6.6 (Santiago)
 
 
 rpm --query redhat-release-server
+
+
+==========================================================================================
+FUNDA 
+http://jonathanhui.com/how-cassandra-read-persists-data-and-maintain-consistency
+http://docs.datastax.com/en/cassandra/2.1/cassandra/operations/opsAddingRemovingNodeTOC.html
+https://mindmajix.com/cassandra-interview-questionshttps://www.instaclustr.com/wp-content/uploads/2017/11/Tips-and-Tricks-for-Apache-Cassandra-on-Azure.pdfhttps://www.datadoghq.com/blog/how-to-collect-cassandra-metrics/#collecting-metrics-with-nodetool
+
+
+STEP1 : auto_bootstrap (Default: true ) . It makes new (non-seed) nodes automatically migrate the right data to themselves.                When initializing a fresh cluster with no data, 
+For each node, set the following properties in the cassandra.yaml file:.
+	1. add auto_bootstrap: false
+	2. Set other properties, such as -seeds and endpoint_snitch, to match the cluster settings.
+	• auto_bootstrap: Set this configuration option to true so that a newly joining node can collect data from other nodes.
+	• listen_address: Set this to the appropriate IP address of the node.
+	• endpoint_snitch: Ensure that the new node is using the same snitch as that being used by the other nodes.
+	• seed_provider: This lists the nodes that are in the seed node list in the existing cluster. Since this new node is bootstrapping, 
+	• cluster_name: Ensure that the cluster name is the same as that of the other nodes in the cluster.
+	
+
+STEP2 : The easiest way to fix this is to run a repair on the node which will ensure that it gets any data it's missing.
+run $CASSANDRA_HOME/bin/nodetool rebuild
+			NOTE: If you have correct seeds and replication settings. But still the data is not getting replicated to new data center. 
+			Please perform nodetool repair with -full option will replicate data to the new datacenter node.
+
+			Running:
+			nodetool cleanup
+nodetool repair
+nodetool rebuild
+			should solve the issue.
+
+STEP3 : For each new node, change to true or remove auto_bootstrap: false in the cassandra.yaml file.
+              Returns this parameter to its normal setting so the nodes can get all the data from the other nodes in the data center 
+               if restarted.
+
+Testing the cluster
+Get a description of the cluster:
+$$CASSANDRA_HOME/bin/nodetool describecluster
+ 
+Confirm that all the nodes are up:
+$$CASSANDRA_HOME/bin/nodetool status
+• Monitor joining status with “nodetool netstats” 
+nodetool --host 127.0.0.1 info 
+
+nodetool --host 127.0.0.1 info 
+cqlsh
+Create a test keyspace and table on the first node:
+$$CASSANDRA_HOME/bin/c
+cqlsh> CREATE KEYSPACE Hector WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : '3' };  
+cqlsh> USE Hector;
+cqlsh:Hector> CREATE TABLE planet( catalog int PRIMARY KEY, name text, mass double, density float, albedo float );
+cqlsh:Hector> INSERT INTO planet (catalog, name, mass, density, albedo) VALUES ( 3, 'Earth', 5.9722E24, 5.513, 0.367);
+ 
+Confirm you have the table replicated by running the following command on all nodes: 
+$$CASSANDRA_HOME:/bin/cqlsh -e "SELECT * FROM Hector.planet;"
+ 
+ catalog | albedo | density | mass       | name
+---------+--------+---------+------------+-------
+       3 |  0.367 |   5.513 | 5.9722e+24 | Earth
+ 
+Notes
+Updating the replication factor:
+	• Update a keyspace in the cluster and change its replication strategy options: 
+ALTER KEYSPACE "Hector" WITH REPLICATION =  { 'class' : 'SimpleStrategy', 'replication_factor' : 2 };
+	• On each affected node, repair the node:
+$$CASSANDRA_HOME/bin/nodetool repair
+	• Wait until repair completes on a node, then move to the next node.
+ 
+Replication factor describes how many copies of your data exist. Consistency level describes the behavior seen by the client. To have one copy on each node, you need a replication factor equal to the number of nodes. Consistency level deals with number of replicas, not number of nodes.
+
+From <https://support.ca.com/us/knowledge-base-articles.TEC1714429.html> 
+
+http://www.cs.sfu.ca/CourseCentral/732/ggbaker/content/cassandra.html
+
+ 
+If you have a single-DC cluster and latency is minimal between all nodes, then bringing up a new node with auto_bootstrap: true should be fine for you. Also, if at least one copy of your data has been replicated to your local datacenter (the one you are joining the new node to) then this is also the preferred method.
+On the other hand, for multiple DCs I have found more success with setting auto_bootstrap: false and using nodetool rebuild. The reason for this, is because nodetool rebuild allows you to specify a data center as the source of the data. This path gives you the control to contain streaming to a specific DC (and more importantly, not to other DCs). And similar to the above, if you are building a new data center and your data has not yet been fully-replicated to it, then you will need to use nodetool rebuild to stream data from a different DC.
+how read requests would be handled ?
+In both of these scenarios, the token ranges would be computed for your new node when it joins the cluster, regardless of whether or not the data is actually there. So if a read request were to be sent to the new node at CL ONE, it should be routed to a node containing a secondary replica (assuming RF>1). If you queried at CL QUORUM (with RF=3) it should find the other two. That is of course, assuming that the nodes which are picking-up the slack are not overcome by their streaming activities that they cannot also serve requests. This is a big reason why the "2 minute rule" exists.
+The bottom line, is that your queries do have a higher chance of failing before the new node is fully-streamed. Your chances of query success increase with the size of your cluster (more nodes = more scalability, and each bears that much less responsibility for streaming). Basically, if you are going from 3 nodes to 4 nodes, you might get failures. If you are going from 30 nodes to 31, your app probably won't notice a thing.
+Will the new node try to pull data from nodes in the other data centers too?
+Only if your query isn't using a LOCAL consistency level.
+Cassandra has three mechanisms which provide data consistency across replicas:
+	1. Hinted handoff:
+If a node becomes unable to receive a particular write, the write's coordinator node preserves the data to be written as a set of hints. When the node comes back online, the coordinator effects repair by handing off hints so that the node can catch up with the required writes.
+	1. Read Repair:
+In read repair, the database sends a digest request to each replica not directly involved in the read. The database compares all replicas and writes the most recent version to any replica node that does not have it.
+The database can also perform read repair randomly on a table. The read_repair_chance property set for a table configures the frequency of this operation.
+	1. Anti-entropy repair:
+nodetool repair tool compares the data across all replicas and then updates the data to the most recent version
+As I see, to achieve inconsistent data across replicas you need to avoid invocation of these mechanisms, e.g:
+	1. Set up cluster with 2 nodes
+	2. Disable hinted handoff in cassandra.yaml
+	3. Set read_repair_chance to 0 for the table
+	4. Set replication_factorto 2
+	5. Switch off one node
+	6. Perform write requests for the table with consistency level = ONE
+	7. Switch on the node from step 5
+	8. Do NOT perform nodetool repair
+	9. Data from step 6 should be inconsistent across replicas: node from step 5 should not contain replicas of data from step 6
+
+From <https://stackoverflow.com/questions/44242447/how-to-make-cassandra-inconsistent-across-nodes> 
+
+
+Ensure that your clients are configured correctly for the new cluster:
+	• If your client uses the DataStax Java, C#, or Python driver, set the load-balancing policy to DCAwareRoundRobinPolicy (Java, C#, Python).
+	• If you are using another client such as Hector, make sure it does not auto-detect the new nodes so that they aren't contacted by the client until explicitly directed. For example if you are using Hector, use sethostConfig.setAutoDiscoverHosts(false);. If you are using Astyanax, use ConnectionPoolConfigurationImpl.setLocalDatacenter("<data center name">) to ensure you are connecting to the specified data center.
+	• If you are using Astyanax 2.x, with integration with the DataStax Java Driver 2.0, you can set the load-balancing policy to DCAwareRoundRobinPolicy by callingJavaDriverConfigBuilder.withLoadBalancingPolicy().
+AstyanaxContext<Keyspace> context = new AstyanaxContext.Builder()
+    ...
+    .withConnectionPoolConfiguration(new JavaDriverConfigBuilder()
+        .withLoadBalancingPolicy(new TokenAwarePolicy(new DCAwareRoundRobinPolicy()))
+        .build())
+    ...
+From <http://docs.datastax.com/en/archived/cassandra/2.0/cassandra/operations/ops_add_dc_to_cluster_t.html> 
+
+INTRO
+https://dzone.com/articles/introduction-apache-cassandras
+
+THEORY
+http://jonathanhui.com/cassandra-cluster-and-replication
+https://www.guru99.com/cassandra-architecture.html
+https://www.tutorialspoint.com/cassandra/cassandra_data_model.htm
+http://distributeddatastore.blogspot.in/2015/08/cassandra-replication.html
+https://docs.microsoft.com/en-us/azure/virtual-machines/linux/classic/cassandra-nodejs
+
+RESEMBLE OUR SCENARIO
+http://docs.scylladb.com/procedures/create_cluster_multidc/
+
+PERFORMANCE TUNING
+http://jonathanhui.com/cassandra-performance-tuning-and-monitoring
+
+TESTING
+https://www.blazemeter.com/blog/cassandra-load-testing-with-groovy
+https://medium.com/netflix-techblog/jmeter-plugin-for-cassandra-8ca848c0d480
+
+ADDING/REMOVING DC, SWITCHING SNiTCHhttps://docs.datastax.com/en/cassandra/3.0/cassandra/operations/opsSwitchSnitch.html
+
+ISSUE IN SNITCHINGhttps://stackoverflow.com/questions/36859296/is-it-possible-to-change-the-snitch-from-property-back-to-simplesnitch/36863389
+
+https://docs.datastax.com/en/cassandra/2.1/cassandra/architecture/architectureSnitchPFSnitch_t.html
